@@ -1,9 +1,10 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import classification_report
 from scipy.optimize import minimize
+import time
 
 
 def load_data(path):
@@ -124,10 +125,8 @@ def back_propagate(params, inputSize, hiddenSize, numLabels, X, y, Lambda):
 
         d3t = ht - yt   # (1, 10)
 
-        z2t = np.hstack([np.ones([1, 1]), z2t])             # (1, 26)
-        d2t = (theta2.T @ d3t.T).T * sigmoid_gradient(z2t)  # (1, 26)
-
-        d2t = d2t.reshape([1, -1])
+        z2t = np.hstack([np.ones([1, 1]), z2t])             # 加入一列不会偏置单元(bias unit) (1, 26)
+        d2t = (theta2.T @ d3t.T).T * sigmoid_gradient(z2t)  # (26, 10) x (10, 11) = (1, 26)
 
         delta1 = delta1 + d2t[:, 1:].T @ a1t
         delta2 = delta2 + d3t.T @ a2t
@@ -156,7 +155,7 @@ hiddenSize = 25
 numLabels = 10
 Lambda = 1
 
-# 初始化完整网络参数大小的参数数组
+# 初始化完整网络参数大小的参数数组,使其失去对称性
 params = (np.random.random(hiddenSize * (inputSize + 1) + numLabels * (hiddenSize + 1)) - 0.5) * 0.25  # 产生[0, 1)内服从均匀分布的浮点数
 print("parameter shape: ", params.shape)
 
@@ -185,8 +184,9 @@ fmin = minimize(fun=back_propagate,
                 args=(inputSize, hiddenSize, numLabels, X, yOneHot, Lambda),
                 method="TNC",
                 jac=True,
-                options={"maxiter": 25})
+                options={"maxiter": 1000})
 print(fmin)
+
 
 #%%
 theta1 = np.reshape(fmin.x[:hiddenSize * (inputSize + 1)],
@@ -195,11 +195,28 @@ theta2 = np.reshape(fmin.x[hiddenSize * (inputSize + 1):],
                     [numLabels, -1])
 a1, z2, a2, z3, h = forward_propagate(X, theta1, theta2)
 predict = np.argmax(h, axis=1) + 1
+predict[predict == 10] = 0
+y[y == 10] = 0
+
 
 #%%
+predict = predict.reshape([-1, 1])
 correct = np.zeros(predict.shape)
-correct[np.where(y == predict)[0]] = 1
+correct[y == predict] = 1
 print(correct.shape)
 
-accuary = np.sum(correct) / len(correct)
+accuary = np.mean(correct)
 print("accuary:", accuary * 100, "%")
+print(classification_report(y, predict))
+
+
+#%%
+for _ in range(30):
+    i = np.random.randint(0, 5001)
+    temp = X[i, :]
+    temp = temp.reshape([20, 20])
+    plt.imshow(temp.T, cmap=plt.cm.binary)
+    plt.show()
+    print("predict:", predict[i, 0])
+    time.sleep(1)
+
